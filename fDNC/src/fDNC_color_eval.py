@@ -1,11 +1,11 @@
-from DNC_predict import pre_matt
+from fDNC.src.DNC_predict import pre_matt
 import torch
 import argparse
 import glob
 import os
 import pickle
 import numpy as np
-from model import NIT_Registration, find_match
+from fDNC.src.model import NIT_Registration, find_match
 from scipy.optimize import linear_sum_assignment
 import matplotlib.pyplot as plt
 

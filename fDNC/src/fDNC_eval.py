@@ -3,7 +3,7 @@ import torch
 import argparse
 from torch.utils.data import DataLoader
 import numpy as np
-from model import NIT_Registration, neuron_data_pytorch
+from fDNC.src.model import NIT_Registration, neuron_data_pytorch
 import pickle
 import os
 from cpd_rigid_sep import register_rigid

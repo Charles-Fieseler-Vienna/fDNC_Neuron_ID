@@ -1,5 +1,5 @@
 .idea/*
-src/__pycache__/*
-src/.ipynb_checkpoints/*
+fDNC/src/__pycache__/*
+fDNC/src/.ipynb_checkpoints/*
 model/*.bin
 Data_pretrainedModel/*

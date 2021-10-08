@@ -1,6 +1,6 @@
 import argparse
 from torch.utils.data import DataLoader
-from model import NIT_Registration, neuron_data_pytorch
+from fDNC.src.model import NIT_Registration, neuron_data_pytorch
 import torch
 import math
 import time
