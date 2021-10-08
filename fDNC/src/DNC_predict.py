@@ -33,9 +33,13 @@ def predict_label(template_pos, template_label, test_pos,
     return test_label, candidate_list
 
 
-def predict_matches(template_pos, template_label, test_pos,
+def predict_matches(template_pos, test_pos,
                     temp_color=None, test_color=None, cuda=True, topn=5,
                     model_path="../model/model.bin"):
+    """Input can be n x 3, but could be n x 4, and the remaining will be removed
+
+    Input is expected to be z-scored to -1 to 1
+    """
     color_m, num_neui, p_m = _encode_using_pytorch(cuda, model_path, temp_color, template_pos, test_color, test_pos)
     col, p_m, prob_m, row = _calculate_matches_from_encoding(color_m, p_m)
     matches = matches2indices(col, num_neui, prob_m, row)
@@ -43,11 +47,16 @@ def predict_matches(template_pos, template_label, test_pos,
     return matches
 
 
+def filter_matches(matches, threshold):
+    return [m for m in matches if m[2] > threshold]
+
+
 def matches2indices(col, num_neui, prob_m, row):
+    """List of: [template_idx, test_idx, probability]"""
     # Matches in index notation
     matches = [(0, 0, 0)] * num_neui
     for row_i in range(len(row)):
-        matches[row[row_i]] = (row_i, col[row_i], prob_m[row[row_i], col[row_i]])
+        matches[row[row_i]] = (col[row_i], row[row_i], prob_m[row[row_i], col[row_i]])
     return matches
 
 
