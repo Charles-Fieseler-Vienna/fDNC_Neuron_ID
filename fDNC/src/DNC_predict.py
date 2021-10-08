@@ -23,21 +23,68 @@ def match_color_norm(x_cs, y_cs):
     color_m = np.sum(x_c_log[np.newaxis, :, :] * y_c_norm[:, np.newaxis, :], axis=2) - y_H[:, np.newaxis]
     return color_m
 
-def predict_label(temp_pos, temp_label, test_pos, temp_color=None, test_color=None, cuda=True, topn=5,
+def predict_label(template_pos, template_label, test_pos,
+                  temp_color=None, test_color=None, cuda=True, topn=5,
                   model_path="../model/model.bin"):
+    color_m, num_neui, p_m = _encode_using_pytorch(cuda, model_path, temp_color, template_pos, test_color, test_pos)
+    col, p_m, prob_m, row = _calculate_matches_from_encoding(color_m, p_m)
+    candidate_list, test_label = _matches2labels(col, num_neui, p_m, prob_m, row, template_label, topn)
+
+    return test_label, candidate_list
+
+
+def predict_matches(template_pos, template_label, test_pos,
+                    temp_color=None, test_color=None, cuda=True, topn=5,
+                    model_path="../model/model.bin"):
+    color_m, num_neui, p_m = _encode_using_pytorch(cuda, model_path, temp_color, template_pos, test_color, test_pos)
+    col, p_m, prob_m, row = _calculate_matches_from_encoding(color_m, p_m)
+    matches = matches2indices(col, num_neui, prob_m, row)
+
+    return matches
+
+
+def matches2indices(col, num_neui, prob_m, row):
+    # Matches in index notation
+    matches = [(0, 0, 0)] * num_neui
+    for row_i in range(len(row)):
+        matches[row[row_i]] = (row_i, col[row_i], prob_m[row[row_i], col[row_i]])
+    return matches
+
+
+def _matches2labels(col, num_neui, p_m, prob_m, row, template_label, topn):
+    # most probable label
+    test_label = [('', 0)] * num_neui
+    for row_i in range(len(row)):
+        test_label[row[row_i]] = (template_label[col[row_i]], prob_m[row[row_i], col[row_i]])
+    # candidates list
+    p_m_sortidx = np.argsort(-p_m, axis=1)
+    candidate_list = []
+    for row_i, rank_idx in enumerate(p_m_sortidx[:, :topn]):
+        cur_list = [(template_label[idx], prob_m[row_i, idx]) for idx in rank_idx]
+        candidate_list.append(cur_list)
+    return candidate_list, test_label
+
+
+def _calculate_matches_from_encoding(color_m, p_m):
+    # TODO: linear assignment is very sensitive to outliers
+    p_m = p_m[:, :-1] + color_m * 1
+    row, col = linear_sum_assignment(-p_m)
+    prob_m = softmax(p_m, axis=1)
+    return col, p_m, prob_m, row
+
+
+def _encode_using_pytorch(cuda, model_path, temp_color, template_pos, test_color, test_pos):
     model = NIT_Registration(input_dim=3, n_hidden=128, n_layer=6, p_rotate=0, feat_trans=0, cuda=cuda)
     device = torch.device("cuda:0" if cuda else "cpu")
     # load trained model
     params = torch.load(model_path, map_location=lambda storage, loc: storage)
     model.load_state_dict(params['state_dict'])
     model = model.to(device)
-
     # put template worm data and test worm data into a batch
     pt_batch = list()
     color_batch = list()
-
-    pt_batch.append(temp_pos[:, :3])
-    pt_batch.append(test_pos[:, :3])# here we can add more test worm if provided as a list.
+    pt_batch.append(template_pos[:, :3])
+    pt_batch.append(test_pos[:, :3])  # here we can add more test worm if provided as a list.
     if temp_color is not None and test_color is not None:
         color_batch.append(temp_color)
         color_batch.append(test_color)
@@ -48,7 +95,6 @@ def predict_label(temp_pos, temp_label, test_pos, temp_color=None, test_color=No
     data_batch['color'] = color_batch
     data_batch['match_dict'] = None
     data_batch['ref_i'] = 0
-
     model.eval()
     pt_batch = data_batch['pt_batch']
     with torch.no_grad():
@@ -58,29 +104,11 @@ def predict_label(temp_pos, temp_label, test_pos, temp_color=None, test_color=No
     p_m = output_pairs['p_m'][i].detach().cpu().numpy()
     num_neui = len(pt_batch[i])
     p_m = p_m[:num_neui, :]
-
     if data_batch['color'] is None:
         color_m = 0
     else:
         color_m = match_color_norm(data_batch['color'][data_batch['ref_i']], data_batch['color'][i]) * 60
-
-    p_m = p_m[:, :-1] + color_m * 1
-    row, col = linear_sum_assignment(-p_m)
-
-    prob_m = softmax(p_m, axis=1)
-
-    # most probable label
-    test_label = [('', 0)] * num_neui
-    for row_i in range(len(row)):
-        test_label[row[row_i]] = (temp_label[col[row_i]], prob_m[row[row_i], col[row_i]])
-    #candidates list
-    p_m_sortidx = np.argsort(-p_m, axis=1)
-    candidate_list = []
-    for row_i, rank_idx in enumerate(p_m_sortidx[:, :topn]):
-        cur_list = [(temp_label[idx], prob_m[row_i, idx])  for idx in rank_idx]
-        candidate_list.append(cur_list)
-    return test_label, candidate_list
-
+    return color_m, num_neui, p_m
 
 
 def predict(temp_f, test_f):
