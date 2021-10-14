@@ -23,6 +23,7 @@ def match_color_norm(x_cs, y_cs):
     color_m = np.sum(x_c_log[np.newaxis, :, :] * y_c_norm[:, np.newaxis, :], axis=2) - y_H[:, np.newaxis]
     return color_m
 
+
 def predict_label(template_pos, template_label, test_pos,
                   temp_color=None, test_color=None, cuda=True, topn=5,
                   model_path="../model/model.bin"):
