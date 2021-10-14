@@ -23,6 +23,7 @@ def match_color_norm(x_cs, y_cs):
     color_m = np.sum(x_c_log[np.newaxis, :, :] * y_c_norm[:, np.newaxis, :], axis=2) - y_H[:, np.newaxis]
     return color_m
 
+
 def predict_label(template_pos, template_label, test_pos,
                   temp_color=None, test_color=None, cuda=True, topn=5,
                   model_path="../model/model.bin"):
@@ -133,6 +134,7 @@ def predict(temp_f, test_f):
     test_label, candidate_list = predict_label(temp_pos, temp_label, test_pos, temp_color, test_color)
     return test_label, candidate_list
 
+
 def pre_matt(file, scale=200):
     with open(file, 'rb') as fp:
         data = pickle.load(fp)
@@ -166,6 +168,7 @@ def pre_matt(file, scale=200):
     output['f_name'] = file
 
     return output
+
 
 if __name__ == "__main__":
     temp_f = '/projects/LEIFER/Xinwei/github/NeuronNet/pts_id/neuropal_eval/20191213_142710.data'
