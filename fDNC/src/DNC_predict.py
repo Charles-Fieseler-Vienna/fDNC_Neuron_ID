@@ -1,3 +1,5 @@
+import logging
+
 from scipy.optimize import linear_sum_assignment
 import torch
 import pickle
@@ -21,7 +23,16 @@ def match_color_norm(x_cs, y_cs):
     x_c_log = np.log(x_c_norm)
     y_H = np.sum(y_c_log * y_c_norm, axis=1)
     color_m = np.sum(x_c_log[np.newaxis, :, :] * y_c_norm[:, np.newaxis, :], axis=2) - y_H[:, np.newaxis]
+
     return color_m
+
+
+def zimmer_match_color_norm(x_cs, y_cs):
+    # Returns a value between 0 and 1, so shouldn't be multiplied by 60
+    from scipy.spatial import distance
+
+    dist = distance.cdist(x_cs, y_cs, 'euclidean')
+    return np.tanh( 1/(dist+1e-3) )
 
 
 def predict_label(template_pos, template_label, test_pos,
@@ -35,30 +46,44 @@ def predict_label(template_pos, template_label, test_pos,
 
 
 def predict_matches(template_pos, test_pos,
-                    temp_color=None, test_color=None, cuda=True, topn=5,
+                    temp_color=None, test_color=None, cuda=True, topn=None,
+                    encoding_opt=None,
                     model_path="../model/model.bin"):
     """Input can be n x 3, but could be n x 4, and the remaining will be removed
 
     Input is expected to be z-scored to -1 to 1
     """
-    color_m, num_neui, p_m = _encode_using_pytorch(cuda, model_path, temp_color, template_pos, test_color, test_pos)
+    if encoding_opt is None:
+        encoding_opt = {}
+        # encoding_opt = dict(color_matrix_multiplier=60)
+    color_m, num_neui, p_m = _encode_using_pytorch(cuda, model_path, temp_color, template_pos, test_color, test_pos,
+                                                   **encoding_opt)
     col, p_m, prob_m, row = _calculate_matches_from_encoding(color_m, p_m)
-    matches = matches2indices(col, num_neui, prob_m, row)
+    matches, candidate_list = matches2indices(col, num_neui, p_m, prob_m, row, topn)
 
-    return matches
+    return matches, candidate_list
 
 
 def filter_matches(matches, threshold):
     return [m for m in matches if m[2] > threshold]
 
 
-def matches2indices(col, num_neui, prob_m, row):
+def matches2indices(col, num_neui, p_m, prob_m, row, topn=None):
     """List of: [template_idx, test_idx, probability]"""
     # Matches in index notation
     matches = [(0, 0, 0)] * num_neui
     for row_i in range(len(row)):
         matches[row[row_i]] = (col[row_i], row[row_i], prob_m[row[row_i], col[row_i]])
-    return matches
+    # Additional Candidates
+    if topn is not None:
+        p_m_sortidx = np.argsort(-p_m, axis=1)
+        candidate_list = []
+        for row_i, rank_idx in enumerate(p_m_sortidx[:, :topn]):
+            cur_list = [(idx, row_i, prob_m[row_i, idx]) for idx in rank_idx]
+            candidate_list.append(cur_list)
+    else:
+        candidate_list = matches
+    return matches, candidate_list
 
 
 def _matches2labels(col, num_neui, p_m, prob_m, row, template_label, topn):
@@ -83,7 +108,8 @@ def _calculate_matches_from_encoding(color_m, p_m):
     return col, p_m, prob_m, row
 
 
-def _encode_using_pytorch(cuda, model_path, temp_color, template_pos, test_color, test_pos):
+def _encode_using_pytorch(cuda, model_path, temp_color, template_pos, test_color, test_pos,
+                          color_matrix_multiplier=60):
     model = NIT_Registration(input_dim=3, n_hidden=128, n_layer=6, p_rotate=0, feat_trans=0, cuda=cuda)
     device = torch.device("cuda:0" if cuda else "cpu")
     # load trained model
@@ -117,7 +143,17 @@ def _encode_using_pytorch(cuda, model_path, temp_color, template_pos, test_color
     if data_batch['color'] is None:
         color_m = 0
     else:
-        color_m = match_color_norm(data_batch['color'][data_batch['ref_i']], data_batch['color'][i]) * 60
+        zimmer_color_mode = True
+        if not zimmer_color_mode:
+            color_m = match_color_norm(data_batch['color'][data_batch['ref_i']], data_batch['color'][i])
+            color_m *= color_matrix_multiplier
+            # print(f"Max after color multiplier: {np.max(color_m):.10f}")
+        else:
+            color_m = zimmer_match_color_norm(data_batch['color'][data_batch['ref_i']], data_batch['color'][i])
+            color_m *= color_matrix_multiplier
+            if color_matrix_multiplier > 1.0:
+                logging.warning("Color multiplier should be small")
+
     return color_m, num_neui, p_m
 
 
