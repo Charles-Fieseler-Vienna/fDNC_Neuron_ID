@@ -27,5 +27,5 @@ CMD="/scratch/zimmer/Charles/github_repos/fDNC_Neuron_ID/fDNC/src/fDNC_train.py"
 if [ "$is_dry_run" ]; then
   echo "Dry run with command: $CMD"
 else
-  python $CMD --train_path ./Data/train_synthetic --eval_path ./Data/validation_synthetic
+  python $CMD --train_path ./Data/train_synthetic --eval_path ./Data/validation_synthetic --model_path ./fDNC/model/cluster
 fi
