@@ -7,6 +7,7 @@ import time
 import os
 import numpy as np
 
+
 def evaluate_ppl(model, dev_data_loader):
     """ Evaluate perplexity on dev sentences
     @param model (NMT): NMT Model
@@ -50,7 +51,7 @@ if __name__ == "__main__":
     parser.add_argument("--log_every", default=50, type=int)
     parser.add_argument("--valid_niter", default=500, type=int,
                         help="perform validation after how many iterations")
-    parser.add_argument("--model_path", default="../model", type=str)
+    parser.add_argument("--model_path", default="fDNC/model", type=str)
     parser.add_argument("--lr_decay", default=0.5, type=float, help="learning rate decay")
     parser.add_argument("--max_num_trial", default=10, type=int,
                         help="terminate training after how many trials")
@@ -73,32 +74,31 @@ if __name__ == "__main__":
     parser.add_argument("--lamb_entropy", default=0.1, type=float)
     parser.add_argument("--model_name", default='nitReg', type=str)
     parser.add_argument("--use_pretrain", default=0, type=int)
+    parser.add_argument("--pretrain_path", default='fDNC/model/model.bin', type=str)
     tic = time.time()
     args = parser.parse_args()
     print('n_hidden:{}\n'.format(args.n_hidden))
     print('n_layer:{}\n'.format(args.n_layer))
     print('learn rate:{}\n'.format(args.lr))
     print('data mode:{}\n'.format(args.data_mode))
-    cuda = args.cuda
+    # cuda = args.cuda
+    cuda = torch.cuda.is_available()
 
     # loading the data
     train_data = neuron_data_pytorch(args.train_path, batch_sz=args.batch_size, shuffle=True, rotate=True, mode=args.data_mode)
     dev_data = neuron_data_pytorch(args.eval_path, batch_sz=args.batch_size, shuffle=False, rotate=True, mode=args.data_mode)
-
 
     train_data_loader = DataLoader(train_data, shuffle=False, num_workers=1, collate_fn=train_data.custom_collate_fn)
     dev_data_loader = DataLoader(dev_data, shuffle=False, num_workers=1, collate_fn=dev_data.custom_collate_fn)
 
     device = torch.device("cuda:0" if cuda else "cpu")
 
-
     model = NIT_Registration(input_dim=3, n_hidden=args.n_hidden, n_layer=args.n_layer, p_rotate=args.p_rotate,
-                feat_trans=args.f_trans)
+                             feat_trans=args.f_trans, cuda=cuda)
     if args.use_pretrain:
-        pretrain_path = '../model/model.bin'
+        pretrain_path = args.pretrain_path
         params = torch.load(pretrain_path, map_location=lambda storage, loc: storage)
         model.load_state_dict(params['state_dict'])
-
 
     model_name = '{}_nh{}_nl{}_ft{}_data{}_elam_{}_{}.bin'.format(args.model_name, args.n_hidden, args.n_layer,
                                                                   args.f_trans, args.data_mode, args.lamb_entropy,
@@ -106,6 +106,7 @@ if __name__ == "__main__":
     model_save_path = os.path.join(args.model_path, model_name)
     model.train()
     model = model.to(device)
+    print(f"Using device: {model.device}")
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     num_trial = 0

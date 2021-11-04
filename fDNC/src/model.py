@@ -8,6 +8,7 @@ import numpy as np
 import os
 import glob
 
+
 def find_match(label2, label1):
     # label 1 and label 2 is the label for neurons in two worms.
     if len(label1) == 0 or len(label2) == 0:
@@ -33,7 +34,9 @@ class neuron_data_pytorch(Dataset):
     """
     This class is to compile neuron data from different worms
     """
-    def __init__(self, path, batch_sz, shuffle, rotate=False, mode='all', ref_idx=0, show_name=False, shuffle_pt = True, tmp_path= None):
+
+    def __init__(self, path, batch_sz, shuffle, rotate=False, mode='all', ref_idx=0, show_name=False, shuffle_pt=True,
+                 tmp_path=None):
         """
         Initialize parameters.
         :param path: the path for all worms
@@ -55,7 +58,7 @@ class neuron_data_pytorch(Dataset):
             # set the ref_idx to 0
             self.ref_idx = 0
             self.tmp_path = tmp_path
-            self.load_path(path, batch_sz-1)
+            self.load_path(path, batch_sz - 1)
         else:
             self.tmp_path = tmp_path
             self.load_path(path, batch_sz)
@@ -126,7 +129,6 @@ class neuron_data_pytorch(Dataset):
     def __getitem__(self, item):
         return self.bundle_list[item]
 
-
     def load_pt(self, pt_name):
         pt = np.load(pt_name)
         if self.shuffle_pt:
@@ -166,7 +168,7 @@ class neuron_data_pytorch(Dataset):
         for i in range(len(label_batch)):
             match_dict[i], match_dict['unlabel_{}'.format(i)] = find_match(label_batch[i], label_batch[ref_i])
             # get the unlabelled neuron
-            #match_dict['unlabel_{}'.format(i)] = np.where(label_batch[i] == -1)[0]
+            # match_dict['unlabel_{}'.format(i)] = np.where(label_batch[i] == -1)[0]
             # get the outlier neuron
             match_dict['outlier_{}'.format(i)] = np.where(label_batch[i] == -2)[0]
 
@@ -188,7 +190,7 @@ class STNkd(nn.Module):
         self.conv3 = torch.nn.Conv1d(128, 1024, 1)
         self.fc1 = nn.Linear(1024, 512)
         self.fc2 = nn.Linear(512, 256)
-        self.fc3 = nn.Linear(256, k*k)
+        self.fc3 = nn.Linear(256, k * k)
         self.relu = nn.ReLU()
 
         self.bn1 = nn.BatchNorm1d(64)
@@ -211,17 +213,20 @@ class STNkd(nn.Module):
         x = F.relu(self.bn5(self.fc2(x)))
         x = self.fc3(x)
 
-        iden = Variable(torch.from_numpy(np.eye(self.k).flatten().astype(np.float32))).view(1, self.k*self.k).repeat(batchsize, 1)
+        iden = Variable(torch.from_numpy(np.eye(self.k).flatten().astype(np.float32))).view(1, self.k * self.k).repeat(
+            batchsize, 1)
         if x.is_cuda:
             iden = iden.cuda()
         x = x + iden
         x = x.view(-1, self.k, self.k)
         return x
 
+
 class PointTransFeat(nn.Module):
     """
     This class transform the point(rotation) and features.
     """
+
     def __init__(self, rotate=False, feature_transform=False, input_dim=3, hidden_d=64):
         super(PointTransFeat, self).__init__()
         self.hidden_d = hidden_d
@@ -237,6 +242,7 @@ class PointTransFeat(nn.Module):
             self.fstn = STNkd(k=hidden_d)
 
     def forward(self, x):
+        # TODO: add scale transformations
         n_pts = x.size()[2]
         if self.rotate:
             trans = self.stn(x)
@@ -268,10 +274,12 @@ class PointTransFeat(nn.Module):
         loss = torch.mean(torch.norm(torch.bmm(trans, trans.transpose(2, 1)) - I, dim=(1, 2)))
         return loss
 
+
 class NNR(nn.Module):
     """ Simple Neural Neuron Registration Model:
         - Transformer
     """
+
     def __init__(self, input_dim, n_hidden, n_layer=6, cuda=True, p_rotate=False, feat_trans=False):
         """ Init Model
 
@@ -289,7 +297,7 @@ class NNR(nn.Module):
 
         # Linear Layer with bias), project 3d coordinate into hidden dimension.
         self.point_f = PointTransFeat(rotate=self.p_rotate, feature_transform=feat_trans,
-                                          input_dim=input_dim, hidden_d=n_hidden)
+                                      input_dim=input_dim, hidden_d=n_hidden)
 
         self.enc_l = nn.TransformerEncoderLayer(d_model=n_hidden, nhead=8)
         self.model = nn.TransformerEncoder(self.enc_l, n_layer)
@@ -298,7 +306,7 @@ class NNR(nn.Module):
 
     def encode(self, pts_padded, pts_length):
         # pts_padded should be of (b, num_pts, 3)
-        #pts_proj = self.h_projection(pts_padded)
+        # pts_proj = self.h_projection(pts_padded)
         pts_proj = self.point_f(pts_padded.transpose(2, 1))
         pts_proj = pts_proj.transpose(2, 1)
 
@@ -335,14 +343,14 @@ class NNR(nn.Module):
         """
         # Compute sentence lengths
         pts_lengths = [len(s) for s in pts]
-        #pts2_lengths = [len(s) for s in pts2]
+        # pts2_lengths = [len(s) for s in pts2]
 
         # pts_padded should be of dimension (
         pts_padded = self.to_input_tensor(pts)
-        #pts2_padded = self.to_input_tensor(pts2)
+        # pts2_padded = self.to_input_tensor(pts2)
 
         pts_encode = self.encode(pts_padded, pts_lengths)
-        #pts2_encode = self.encode(pts2_padded, pts2_lengths)
+        # pts2_encode = self.encode(pts2_padded, pts2_lengths)
         # pts_encode is of size (b, n_pt, n_dim)
         n_io = int(self.n_hidden / 2)
         pts_encode_i = pts_encode[:, :, :n_io]
@@ -354,7 +362,7 @@ class NNR(nn.Module):
 
         # Here we can see if only use part of it.
         for i_pt in range(batch_sz):
-            pts_encode_single = pts_encode_i[i_pt:i_pt+1, :, :]
+            pts_encode_single = pts_encode_i[i_pt:i_pt + 1, :, :]
             pts_encode_single = pts_encode_single.expand_as(pts_encode_o).transpose(dim0=1, dim1=2)
             # sim_m is of size (b, n_pt, n_pt(copy of ith one))
             sim_m = torch.bmm(pts_encode_o, pts_encode_single)
@@ -398,7 +406,6 @@ class NNR(nn.Module):
 
         return loss_dict, output_pairs
 
-
     def to_input_tensor(self, pts, pad_pt=[0, 0, 0]):
         sents_padded = []
         max_len = max(len(s) for s in pts)
@@ -406,10 +413,9 @@ class NNR(nn.Module):
             padded = [pad_pt] * max_len
             padded[:len(s)] = s
             sents_padded.append(padded)
-        #sents_var = torch.tensor(sents_padded, dtype=torch.long, device=self.device)
+        # sents_var = torch.tensor(sents_padded, dtype=torch.long, device=self.device)
         sents_var = torch.tensor(sents_padded, dtype=torch.float, device=self.device)
-        return sents_var #torch.t(sents_var)
-
+        return sents_var  # torch.t(sents_var)
 
     @staticmethod
     def load(model_path: str):
@@ -442,6 +448,7 @@ class NIT(nn.Module):
     """ Simple Neuron Id transformer:
         - Transformer
     """
+
     def __init__(self, input_dim, n_hidden, n_layer=6, cuda=True, p_rotate=False, feat_trans=False):
         """ Init Model
 
@@ -457,7 +464,7 @@ class NIT(nn.Module):
         self.fc_outlier = nn.Linear(n_hidden, 1)
         # Linear Layer with bias), project 3d coordinate into hidden dimension.
         self.point_f = PointTransFeat(rotate=self.p_rotate, feature_transform=feat_trans,
-                                          input_dim=input_dim, hidden_d=n_hidden)
+                                      input_dim=input_dim, hidden_d=n_hidden)
 
         self.enc_l = nn.TransformerEncoderLayer(d_model=n_hidden, nhead=8)
         self.model = nn.TransformerEncoder(self.enc_l, n_layer)
@@ -466,7 +473,7 @@ class NIT(nn.Module):
 
     def encode(self, pts_padded, pts_length):
         # pts_padded should be of (b, num_pts, 3)
-        #pts_proj = self.h_projection(pts_padded)
+        # pts_proj = self.h_projection(pts_padded)
         pts_proj = self.point_f(pts_padded.transpose(2, 1))
         pts_proj = pts_proj.transpose(2, 1)
         mask = self.generate_sent_masks(pts_proj, pts_length)
@@ -525,7 +532,7 @@ class NIT(nn.Module):
 
         pts_encode = self.encode(pts_padded, pts_lengths)
 
-        ref_emb = pts_encode[ref_idx:ref_idx+1, :pts_lengths[ref_idx], :]
+        ref_emb = pts_encode[ref_idx:ref_idx + 1, :pts_lengths[ref_idx], :]
         ref_emb = torch.repeat_interleave(ref_emb, repeats=pts_encode.size(0), dim=0)
 
         sim_m = torch.bmm(pts_encode, ref_emb.transpose(dim0=1, dim1=2))
@@ -586,7 +593,6 @@ class NIT(nn.Module):
 
         return loss_dict, output_pairs
 
-
     def to_input_tensor(self, pts, pad_pt=[0, 0, 0]):
         sents_padded = []
         max_len = max(len(s) for s in pts)
@@ -594,10 +600,9 @@ class NIT(nn.Module):
             padded = [pad_pt] * max_len
             padded[:len(s)] = s
             sents_padded.append(padded)
-        #sents_var = torch.tensor(sents_padded, dtype=torch.long, device=self.device)
+        # sents_var = torch.tensor(sents_padded, dtype=torch.long, device=self.device)
         sents_var = torch.tensor(sents_padded, dtype=torch.float, device=self.device)
-        return sents_var #torch.t(sents_var)
-
+        return sents_var  # torch.t(sents_var)
 
     @staticmethod
     def load(model_path: str):
@@ -625,6 +630,7 @@ class NIT(nn.Module):
 
         torch.save(params, path)
 
+
 class NIT_Registration(NIT):
     """ Neuron Id transformer for registration between two datasets:
         - Transformer
@@ -633,7 +639,7 @@ class NIT_Registration(NIT):
     def __init__(self, input_dim, n_hidden, n_layer=6, cuda=True, p_rotate=False, feat_trans=False):
         super(NIT_Registration, self).__init__(input_dim, n_hidden, n_layer, cuda, p_rotate, feat_trans)
         self.point_f = PointTransFeat(rotate=self.p_rotate, feature_transform=feat_trans,
-                                          input_dim=input_dim, hidden_d=n_hidden)
+                                      input_dim=input_dim, hidden_d=n_hidden)
         self.n_hidden = n_hidden
         self.n_layer = n_layer
         self.fc_outlier = nn.Linear(n_hidden, 1)
@@ -643,7 +649,7 @@ class NIT_Registration(NIT):
         pts_proj = pts_proj.transpose(2, 1)
         mask = self.generate_sent_masks(pts_proj, pts_length)
         # append the ref points to each batch
-        ref_pts_proj = pts_proj[ref_idx:ref_idx+1, :pts_length[ref_idx], :]
+        ref_pts_proj = pts_proj[ref_idx:ref_idx + 1, :pts_length[ref_idx], :]
         mask_ref = torch.zeros((mask.size(0), pts_length[ref_idx]), dtype=torch.float, device=mask.device).bool()
 
         # mov_ind = torch.zeros((pts_proj.size(0), pts_proj.size(1), 1), device=pts_proj.device)
