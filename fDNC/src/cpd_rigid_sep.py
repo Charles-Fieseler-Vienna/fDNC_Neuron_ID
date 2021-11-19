@@ -2,8 +2,8 @@ from __future__ import (absolute_import, division, print_function, unicode_liter
 from builtins import *
 import numpy.matlib
 import numpy as np
-from cpd_p import cpd_p_sep, cpd_p
-from cpd_p_color import cpd_p_color
+from fDNC.src.cpd_p import cpd_p_sep, cpd_p
+from fDNC.src.cpd_p_color import cpd_p_color
 
 #def register_translation(x, y, w, x_c=[], y_c=[], sigma2c=0.1, max_it=50):
 
