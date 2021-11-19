@@ -183,5 +183,4 @@ def register_rigid(x, y, w, max_it=250, x_c=[], y_c=[], fix_scale=False, sigma2c
         r_out = r
         ts_out = ts
 
-
     return t, r_out, ts_out, sigma2

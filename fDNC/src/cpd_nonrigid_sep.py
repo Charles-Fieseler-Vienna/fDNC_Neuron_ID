@@ -4,7 +4,7 @@ from builtins import *
 import numpy as np
 import numpy.matlib
 import scipy.sparse
-from cpd_p import cpd_p
+from fDNC.src.cpd_p import cpd_p
 
 
 def register_nonrigid(x, y, w, lamb=3.0, beta=2.0, max_it=150):
