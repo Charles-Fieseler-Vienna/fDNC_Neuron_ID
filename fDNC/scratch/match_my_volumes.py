@@ -1,5 +1,5 @@
-from DLC_for_WBFM.utils.projects.finished_project_data import finished_project_data
-from DLC_for_WBFM.utils.xinwei_fdnc.formatting import zimmer2leifer
+from wbfm.utils.projects.finished_project_data import finished_project_data
+from wbfm.utils.xinwei_fdnc.formatting import zimmer2leifer
 from fDNC.src.DNC_predict import predict_matches
 
 # Load my data
